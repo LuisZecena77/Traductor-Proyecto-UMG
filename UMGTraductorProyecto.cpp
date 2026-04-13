@@ -2,11 +2,8 @@
 #include <fstream>
 #include <string>
 #include <windows.h>
-#include <sapi.h>
-
 using namespace std;
 
-// ===== NODO =====
 struct nodo{
     string esp, ita, fra, ale, eng;
     nodo *izq, *der;
@@ -14,7 +11,7 @@ struct nodo{
 
 typedef nodo* Arbol;
 
-// ===== CREAR =====
+// - Crear nodo -
 Arbol crearNodo(string esp, string ita, string fra, string ale, string eng){
     Arbol nuevo = new nodo();
     nuevo->esp = esp;
@@ -26,72 +23,65 @@ Arbol crearNodo(string esp, string ita, string fra, string ale, string eng){
     return nuevo;
 }
 
-// ===== BUSCAR =====
-Arbol buscar(Arbol arbol, string palabra){
+// - Buscar (solo por español)-
+Arbol buscar(Arbol arbol, string esp){
     if(arbol == NULL) return NULL;
-
-    if(palabra == arbol->esp || palabra == arbol->ita ||
-       palabra == arbol->fra || palabra == arbol->ale ||
-       palabra == arbol->eng){
-        return arbol;
-    }
-
-    if(palabra < arbol->esp)
-        return buscar(arbol->izq, palabra);
+    if(esp == arbol->esp) return arbol;
+    if(esp < arbol->esp)
+        return buscar(arbol->izq, esp);
     else
-        return buscar(arbol->der, palabra);
+        return buscar(arbol->der, esp);
 }
 
-// ===== INSERTAR =====
+// - Insertar -
 void insertar(Arbol &arbol, string esp, string ita, string fra, string ale, string eng){
-    if(buscar(arbol, esp)){
-        cout << "La palabra ya existe, mostrando traducciones:\n";
-        return;
-    }
-
     if(arbol == NULL){
         arbol = crearNodo(esp, ita, fra, ale, eng);
     }
     else if(esp < arbol->esp){
         insertar(arbol->izq, esp, ita, fra, ale, eng);
     }
-    else{
+    else if(esp > arbol->esp){
         insertar(arbol->der, esp, ita, fra, ale, eng);
+    }
+    else{
+        cout << "La palabra ya existe en el diccionario.\n";
     }
 }
 
-// ===== MOSTRAR =====
+//- Mostrar en orden - 
 void enOrden(Arbol arbol){
     if(arbol != NULL){
         enOrden(arbol->izq);
-
-        cout << "\nEspañol: " << arbol->esp << endl;
+        cout << "\nEspanol:  " << arbol->esp << endl;
         cout << " Italiano: " << arbol->ita << endl;
-        cout << " Frances: " << arbol->fra << endl;
-        cout << " Aleman: " << arbol->ale << endl;
-        cout << " Ingles: " << arbol->eng << endl;
+        cout << " Frances:  " << arbol->fra << endl;
+        cout << " Aleman:   " << arbol->ale << endl;
+        cout << " Ingles:   " << arbol->eng << endl;
         cout << "--------------------------\n";
-
         enOrden(arbol->der);
     }
 }
 
-// ===== MINIMO =====
+// - para eliminacion caso dos hijos -
 Arbol minimo(Arbol arbol){
     while(arbol->izq != NULL)
         arbol = arbol->izq;
     return arbol;
 }
 
-// ===== ELIMINAR =====
 Arbol eliminar(Arbol arbol, string esp){
-    if(arbol == NULL) return arbol;
+    if(arbol == NULL){
+        cout << "La palabra no se encontro.\n";
+        return arbol;
+    }
 
     if(esp < arbol->esp)
         arbol->izq = eliminar(arbol->izq, esp);
     else if(esp > arbol->esp)
         arbol->der = eliminar(arbol->der, esp);
     else{
+        // Caso 1 y 2: sin hijo izquierdo o sin hijo derecho
         if(arbol->izq == NULL){
             Arbol temp = arbol->der;
             delete arbol;
@@ -102,21 +92,39 @@ Arbol eliminar(Arbol arbol, string esp){
             delete arbol;
             return temp;
         }
-
+        // Caso 3: dos hijos - reemplazar con sucesor inorden
         Arbol temp = minimo(arbol->der);
-
         arbol->esp = temp->esp;
         arbol->ita = temp->ita;
         arbol->fra = temp->fra;
         arbol->ale = temp->ale;
         arbol->eng = temp->eng;
-
         arbol->der = eliminar(arbol->der, temp->esp);
     }
     return arbol;
 }
 
-// ===== CARGAR ARCHIVO =====
+// - Guardar en orden -
+void guardarRecursivo(Arbol arbol, ofstream &fs){
+    if(arbol != NULL){
+        guardarRecursivo(arbol->izq, fs);
+        fs << arbol->esp << ","
+           << arbol->ita << ","
+           << arbol->fra << ","
+           << arbol->ale << ","
+           << arbol->eng << "\n";
+        guardarRecursivo(arbol->der, fs);
+    }
+}
+
+// - Guardar archivo -
+void guardarArchivo(Arbol arbol){
+    ofstream fs("diccionario.txt");
+    guardarRecursivo(arbol, fs);
+    fs.close();
+}
+
+// Cargar Archivo CVS -
 void cargarArchivo(Arbol &arbol){
     ifstream fe("diccionario.txt");
 
@@ -135,7 +143,7 @@ void cargarArchivo(Arbol &arbol){
     cout << "Datos cargados\n";
 }
 
-// ===== AUDIO =====
+// - Audio con PowerShell TTS -
 void reproducirAudio(string palabra){
     string comando = "powershell -c \"Add-Type -AssemblyName System.Speech; "
                      "$voz = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
@@ -143,7 +151,7 @@ void reproducirAudio(string palabra){
     system(comando.c_str());
 }
 
-// ===== TRADUCIR =====
+// - Traductor -
 void traducir(Arbol arbol){
     int origen, destino;
     string palabra;
@@ -183,60 +191,86 @@ void traducir(Arbol arbol){
     reproducirAudio(resultado);
 }
 
-// ===== MAIN =====
+// - Main -
 int main(){
+    SetConsoleOutputCP(65001);
+    SetConsoleCP(65001);
+
     Arbol arbol = NULL;
     int op;
     string esp, ita, fra, ale, eng;
 
     do{
         system("cls");
-        cout << "==== DICCIONARIO MULTILENGUAJE ====\n";
+        cout << "---------- PROYECTO FINAL FASE 1 DICCIONARIO MULTILENGUAJE ----------\n";
         cout << "1. Cargar archivo\n";
         cout << "2. Insertar palabra\n";
         cout << "3. Mostrar diccionario\n";
-        cout << "4. Traducir\n";
+        cout << "4. Traducir palabra\n";
         cout << "5. Eliminar palabra\n";
-        cout << "6. Audio manual\n";
+        cout << "6. Audio\n";
         cout << "0. Salir\n";
+        cout << "Opcion: ";
         cin >> op;
 
         switch(op){
         case 1:
+            system("cls");
             cargarArchivo(arbol);
             system("pause");
             break;
 
         case 2:
-            cout << "Español: "; cin >> esp;
+            system("cls");
+            cout << "=== Insertar Palabra ===\n";
+            cout << "Espanol:  "; cin >> esp;
             cout << "Italiano: "; cin >> ita;
-            cout << "Frances: "; cin >> fra;
-            cout << "Aleman: "; cin >> ale;
-            cout << "Ingles: "; cin >> eng;
+            cout << "Frances:  "; cin >> fra;
+            cout << "Aleman:   "; cin >> ale;
+            cout << "Ingles:   "; cin >> eng;
             insertar(arbol, esp, ita, fra, ale, eng);
+            guardarArchivo(arbol);
+            system("pause");
             break;
 
         case 3:
+            system("cls");
+            cout << "=== Diccionario Completo ===\n";
             enOrden(arbol);
             system("pause");
             break;
 
         case 4:
+            system("cls");
+            cout << "=== Traducir ===\n";
             traducir(arbol);
             system("pause");
             break;
 
         case 5:
-            cout << "Eliminar palabra (español): ";
-            cin >> esp;
+            system("cls");
+            cout << "=== Eliminar Palabra ===\n";
+            cout << "Palabra en espanol: "; cin >> esp;
             arbol = eliminar(arbol, esp);
+            guardarArchivo(arbol);
+            system("pause");
             break;
 
         case 6:
-            cout << "Palabra para audio: ";
-            cin >> esp;
+            system("cls");
+            cout << "=== Audio ===\n";
+            cout << "Palabra: "; cin >> esp;
             reproducirAudio(esp);
+            system("pause");
             break;
+
+        case 0:
+            cout << "Saliendo...\n";
+            break;
+
+        default:
+            cout << "Opcion no valida.\n";
+            system("pause");
         }
 
     }while(op != 0);
